@@ -141,7 +141,7 @@ export class WebDFU {
     return process;
   }
 
-  write(xfer_size: number, data: ArrayBuffer, manifestationTolerant: boolean): WebDFUProcessWrite {
+  write(xfer_size: number, data: ArrayBuffer, manifestationTolerant: boolean, reset: boolean = true): WebDFUProcessWrite {
     if (!this) {
       throw new WebDFUError("Required initialized driver");
     }
@@ -153,9 +153,9 @@ export class WebDFU {
         let result: Promise<void>;
 
         if (this.type === WebDFUType.SDFUse) {
-          result = this.do_dfuse_write(process, xfer_size, data);
+          result = this.do_dfuse_write(process, xfer_size, data, reset);
         } else {
-          result = this.do_write(process, xfer_size, data, manifestationTolerant);
+          result = this.do_write(process, xfer_size, data, manifestationTolerant, reset);
         }
 
         result.then(() => process.events.emit("end")).catch((error) => process.events.emit("error", error));
@@ -635,7 +635,8 @@ export class WebDFU {
     process: WebDFUProcessWrite,
     xfer_size: number,
     data: ArrayBuffer,
-    manifestationTolerant = true
+    manifestationTolerant = true,
+	  reset: boolean = true
   ): Promise<void> {
     let bytes_sent = 0;
     let expected_size = data.byteLength;
@@ -709,24 +710,26 @@ export class WebDFU {
       } catch (error) {}
     }
 
-    // Reset to exit MANIFEST_WAIT_RESET
-    try {
-      await this.device.reset();
-    } catch (error) {
-      if (
-        error == "NetworkError: Unable to reset the device." ||
-        error == "NotFoundError: Device unavailable." ||
-        error == "NotFoundError: The device was disconnected."
-      ) {
-        // Ignored reset error
-      } else {
-        throw new WebDFUError("Error during reset for manifestation: " + error);
-      }
-    }
+	if (reset) {
+		// Reset to exit MANIFEST_WAIT_RESET
+		try {
+		  await this.device.reset();
+		} catch (error) {
+		  if (
+			error == "NetworkError: Unable to reset the device." ||
+			error == "NotFoundError: Device unavailable." ||
+			error == "NotFoundError: The device was disconnected."
+		  ) {
+			// Ignored reset error
+		  } else {
+			throw new WebDFUError("Error during reset for manifestation: " + error);
+		  }
+		}
+	}
   }
 
   // DFUse specific
-  private async do_dfuse_write(process: WebDFUProcessWrite, xfer_size: number, data: ArrayBuffer) {
+  private async do_dfuse_write(process: WebDFUProcessWrite, xfer_size: number, data: ArrayBuffer, reset: boolean) {
     if (!this.dfuseMemoryInfo || !this.dfuseMemoryInfo.segments) {
       throw new WebDFUError("No memory map available");
     }
@@ -795,14 +798,16 @@ export class WebDFU {
 
     process.events.emit("write/end", bytes_sent);
 
-    try {
-      await this.dfuseCommand(DFUseCommands.SET_ADDRESS, startAddress, 4);
-      await this.download(new ArrayBuffer(0), 0);
-    } catch (error) {
-      throw new WebDFUError("Error during DfuSe manifestation: " + error);
-    }
+    if (reset) {
+      try {
+        await this.dfuseCommand(DFUseCommands.SET_ADDRESS, startAddress, 4);
+        await this.download(new ArrayBuffer(0), 0);
+      } catch (error) {
+        throw new WebDFUError("Error during DfuSe manifestation: " + error);
+      }
 
-    await this.poll_until((state) => state == dfuCommands.dfuMANIFEST);
+      await this.poll_until((state) => state == dfuCommands.dfuMANIFEST);
+    }
   }
 
   private async do_dfuse_read(process: WebDFUProcessRead, xfer_size: number, max_size = Infinity) {

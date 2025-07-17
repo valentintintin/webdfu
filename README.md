@@ -9,6 +9,11 @@ WebDFU — driver for working with DFU and DfuseDriver in a browser over [Web US
 - [ST DfuSe](http://dfu-util.sourceforge.net/dfuse.html) download and upload firmware
 - Switching from the runtime configuration to the DFU bootloader (DFU detach)
 
+## Fork
+
+Add argument `reset` in `write` function.
+This allow to chain image flash inside a device.
+
 ## Install
 
 ```shell
