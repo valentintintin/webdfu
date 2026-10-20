@@ -14,6 +14,10 @@ WebDFU — driver for working with DFU and DfuseDriver in a browser over [Web US
 Add argument `reset` in `write` function.
 This allow to chain image flash inside a device.
 
+`async_sleep` only if `pollTimeout` > 0.
+
+Send `SET_ADDRESS` only if needed.
+
 ## Install
 
 ```shell

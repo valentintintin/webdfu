@@ -2,6 +2,15 @@
 
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## 0.1.7
+
+- `async_sleep` only if `pollTimeout` > 0
+- Send `SET_ADDRESS` only if needed
+
+## 0.1.6
+
+- Add argument `reset` in `write` function
+
 ## 0.1.5
 
 - Allow empty commands

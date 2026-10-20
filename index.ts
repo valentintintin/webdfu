@@ -587,7 +587,7 @@ export class WebDFU {
     }
 
     while (!state_predicate(dfu_status.state) && dfu_status.state != dfuCommands.dfuERROR) {
-      await async_sleep(dfu_status.pollTimeout);
+      if (dfu_status.pollTimeout > 0) await async_sleep(dfu_status.pollTimeout);
       dfu_status = await this.getStatus();
     }
 
@@ -771,7 +771,11 @@ export class WebDFU {
 
     process.events.emit("write/start");
 
-    let address = startAddress;
+    // DfuSe address = (wBlockNum - 2) * xfer_size + pointer: one SET_ADDRESS, then increasing block numbers.
+    // wBlockNum is 16 bits, so the pointer is moved forward again before it overflows.
+    let blockNum = 2;
+    let blockBase = startAddress;
+    let needSetAddress = true;
     while (bytes_sent < expected_size) {
       const bytes_left = expected_size - bytes_sent;
       const chunk_size = Math.min(bytes_left, xfer_size);
@@ -779,10 +783,17 @@ export class WebDFU {
       let bytes_written = 0;
       let dfu_status;
       try {
-        await this.dfuseCommand(DFUseCommands.SET_ADDRESS, address, 4);
-        bytes_written = await this.download(data.slice(bytes_sent, bytes_sent + chunk_size), 2);
+        if (needSetAddress) {
+          await this.dfuseCommand(DFUseCommands.SET_ADDRESS, blockBase, 4);
+          needSetAddress = false;
+        }
+        bytes_written = await this.download(data.slice(bytes_sent, bytes_sent + chunk_size), blockNum++);
         dfu_status = await this.poll_until_idle(dfuCommands.dfuDOWNLOAD_IDLE);
-        address += chunk_size;
+        if (blockNum > 0xffff) {
+          blockBase += (blockNum - 2) * xfer_size;
+          blockNum = 2;
+          needSetAddress = true;
+        }
       } catch (error) {
         throw new WebDFUError("Error during DfuSe download: " + error);
       }
